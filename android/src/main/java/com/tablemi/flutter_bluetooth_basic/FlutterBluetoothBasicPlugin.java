@@ -73,7 +73,10 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         this.stateChannel = new EventChannel(flutterPluginBinding.getBinaryMessenger(), NAMESPACE + "/state");
         stateChannel.setStreamHandler(stateStreamHandler);
         this.context = (Application) pluginBinding.getApplicationContext();
-        this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(BluetoothManager.class);
+        } else
+            this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.mBluetoothAdapter = mBluetoothManager.getAdapter();
 
     }
@@ -184,7 +187,8 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 result.success(null);
                 break;
             case "connect":
-                ensurePermissionBeforeAction(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? Manifest.permission.BLUETOOTH_CONNECT : null, (granted, permission) -> {
+                ensurePermissionBeforeAction(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                        ? Manifest.permission.BLUETOOTH_CONNECT : null, (granted, permission) -> {
                     if (!granted) {
                         result.error(
                                 "no_permissions", String.format("flutter basic plugin requires %s for new connection", permission), null);
