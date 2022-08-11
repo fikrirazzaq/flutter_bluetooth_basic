@@ -85,7 +85,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         stateChannel.setStreamHandler(stateStreamHandler);
         this.context = (Application) pluginBinding.getApplicationContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            this.mBluetoothManager =  this.context.getSystemService(BluetoothManager.class);
+            this.mBluetoothManager = this.context.getSystemService(BluetoothManager.class);
         } else
             this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.mBluetoothAdapter = mBluetoothManager.getAdapter();
@@ -117,7 +117,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                             // @TODO - used underlying value of `Activity.RESULT_CANCELED`
                             //  since we tend to use `androidx` in which I were
                             //  not able to find the constant.
-                            if (pendingResult!= null) {
+                            if (pendingResult != null) {
                                 pendingResult.success(resultCode != 0);
                             }
                             return true;
@@ -304,6 +304,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
 
     }
 
+
+    static private boolean checkIsDeviceConnected(BluetoothDevice device) {
+        try {
+            java.lang.reflect.Method method;
+            method = device.getClass().getMethod("isConnected");
+            return (boolean) (Boolean) method.invoke(device);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private void getDevices(Result result) {
         List<Map<String, Object>> devices = new ArrayList<>();
         for (BluetoothDevice device : mBluetoothAdapter.getBondedDevices()) {
@@ -311,6 +322,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             ret.put("address", device.getAddress());
             ret.put("name", device.getName());
             ret.put("type", device.getType());
+            ret.put("isConnected", checkIsDeviceConnected(device));
             devices.add(ret);
         }
 
@@ -358,6 +370,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         ret.put("address", device.getAddress());
         ret.put("name", device.getName());
         ret.put("type", device.getType());
+        ret.put("isConnected", checkIsDeviceConnected(device));
 
         new Handler(Looper.getMainLooper()).post(() -> {
             synchronized (tearDownLock) {
