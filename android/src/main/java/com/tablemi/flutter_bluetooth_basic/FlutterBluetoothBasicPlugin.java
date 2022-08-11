@@ -316,20 +316,11 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             final List<Map<String, Object>> list = (List<Map<String, Object>>) args.get("data");
             if (list == null) {
                 return;
-            }
-            if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id] == null ||
-                    !DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
-                result.error("not connect", "state not right", null);
-            else {
+            } else {
                 threadPool = ThreadPool.getInstantiation();
                 threadPool.addSerialTask(() -> {
-                    if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getCurrentPrinterCommand() == PrinterCommand.ESC) {
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(PrintContent.mapToReceipt(config, list));
-                    } else if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getCurrentPrinterCommand() == PrinterCommand.TSC) {
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(PrintContent.mapToLabel(config, list));
-                    } else if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getCurrentPrinterCommand() == PrinterCommand.CPCL) {
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(PrintContent.mapToCPCL(config, list));
-                    }
+                    Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
+                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
                 });
             }
         } else {
