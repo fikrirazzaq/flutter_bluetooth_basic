@@ -41,5 +41,5 @@ android {
 dependencies {
     implementation files('libs/gprintersdkv2.jar')
     implementation "androidx.core:core:1.8.0"
-    //implementation files("C:\\WorkSpace\\SDK\\flutter\\bin\\cache\\artifacts\\engine\\android-x86\\flutter.jar")
+    implementation files("C:\\WorkSpace\\SDK\\flutter\\bin\\cache\\artifacts\\engine\\android-x86\\flutter.jar")
 }

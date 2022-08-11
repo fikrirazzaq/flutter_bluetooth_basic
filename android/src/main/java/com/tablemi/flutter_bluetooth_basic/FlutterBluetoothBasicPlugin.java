@@ -1,6 +1,7 @@
 package com.tablemi.flutter_bluetooth_basic;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.Application;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -109,6 +110,22 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
         Log.d(TAG, "onAttachedToActivity");
         activityBinding = binding;
+        binding.addActivityResultListener(
+                (requestCode, resultCode, data) -> {
+                    switch (requestCode) {
+                        case REQUEST_ENABLE_BLUETOOTH:
+                            // @TODO - used underlying value of `Activity.RESULT_CANCELED`
+                            //  since we tend to use `androidx` in which I were
+                            //  not able to find the constant.
+                            if (pendingResult!= null) {
+                                pendingResult.success(resultCode != 0);
+                            }
+                            return true;
+                        default:
+                            return false;
+                    }
+                }
+        );
         activityBinding.addRequestPermissionsResultListener(this);
     }
 
@@ -228,6 +245,32 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 startScan(call, result);
                 break;
             }
+
+            case "getBondedDevices":
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+                        ActivityCompat.requestPermissions(activityBinding.getActivity(), new String[]{
+                                        Manifest.permission.ACCESS_FINE_LOCATION,},
+                                REQUEST_DEVICES);
+                        pendingResult = result;
+                        break;
+                    }
+                } else {
+                    if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+                        ActivityCompat.requestPermissions(activityBinding.getActivity(),
+                                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_DEVICES);
+                        pendingResult = result;
+                        break;
+                    }
+                }
+                getDevices(result);
+                break;
+
             case "stopScan":
                 stopScan();
                 result.success(null);
