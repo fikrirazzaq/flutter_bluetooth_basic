@@ -42,8 +42,8 @@ public class PrintContent {
             int y = (int) (m.get("y") == null ? 0 : m.get("y"));
 
             EscCommand.ENABLE emphasized = weight == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
-            EscCommand.ENABLE doublewidth = width == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
-            EscCommand.ENABLE doubleheight = height == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
+            /*EscCommand.ENABLE doublewidth = width == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
+            EscCommand.ENABLE doubleheight = height == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;*/
             EscCommand.ENABLE isUnderline = underline == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
             EscCommand.WIDTH_ZOOM width_zoom = EscCommand.WIDTH_ZOOM.MUL_1;
             EscCommand.HEIGHT_ZOOM height_zoom = EscCommand.HEIGHT_ZOOM.MUL_1;
@@ -81,7 +81,7 @@ public class PrintContent {
 
             if ("text".equals(type)) {
                 // 设置为倍高倍宽
-                //esc.addSelectPrintModes(EscCommand.FONT.FONTA, emphasized, doubleheight, doublewidth, isUnderline);
+                esc.addSelectPrintModes(EscCommand.FONT.FONTA, emphasized, EscCommand.ENABLE.OFF, EscCommand.ENABLE.OFF, isUnderline);
                 esc.addSetCharcterSize(width_zoom, height_zoom);
                 if (x > 0)
                     esc.addSetAbsolutePrintPosition((short) x);

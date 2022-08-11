@@ -24,6 +24,8 @@ import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -441,11 +443,25 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         if (scanner != null) scanner.stopScan(mScanCallback);
     }
 
+    static private String exceptionToString(Exception ex) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        ex.printStackTrace(pw);
+        return sw.toString();
+    }
+
     private void connect(Result result, Map<String, Object> args) {
         if (args.containsKey("address")) {
             String address = (String) args.get("address");
-            disconnect();
 
+            try {
+                if (!BluetoothAdapter.checkBluetoothAddress(address)) {
+                    throw new ClassCastException();
+                }
+            } catch (ClassCastException ex) {
+                result.error("invalid_argument", "'address' argument is required to be string containing remote MAC address", null);
+                return;
+            }
             new DeviceConnFactoryManager.Build()
                     .setId(id)
                     // Set the connection method
@@ -458,11 +474,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             threadPool.addSerialTask(new Runnable() {
                 @Override
                 public void run() {
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
+                    try {
+                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
+                        if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
+                            result.success(true);
+                    } catch (Exception ex) {
+                        result.error("connect_error", ex.getMessage(), exceptionToString(ex));
+                    }
                 }
             });
 
-            result.success(true);
+
         } else {
             result.error("invalid_argument", "Argument 'address' not found", null);
         }
