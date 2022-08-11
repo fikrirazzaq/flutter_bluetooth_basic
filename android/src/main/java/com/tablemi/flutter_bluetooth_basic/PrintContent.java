@@ -45,6 +45,35 @@ public class PrintContent {
             EscCommand.ENABLE doublewidth = width == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
             EscCommand.ENABLE doubleheight = height == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
             EscCommand.ENABLE isUnderline = underline == 0 ? EscCommand.ENABLE.OFF : EscCommand.ENABLE.ON;
+            EscCommand.WIDTH_ZOOM width_zoom = EscCommand.WIDTH_ZOOM.MUL_1;
+            EscCommand.HEIGHT_ZOOM height_zoom = EscCommand.HEIGHT_ZOOM.MUL_1;
+            switch (width) {
+                case 0:
+                    width_zoom = EscCommand.WIDTH_ZOOM.MUL_1;
+                    break;
+                case 16:
+                    width_zoom = EscCommand.WIDTH_ZOOM.MUL_2;
+                    break;
+                case 32:
+                    width_zoom = EscCommand.WIDTH_ZOOM.MUL_3;
+                    break;
+                default:
+                    break;
+            }
+
+            switch (height) {
+                case 0:
+                    height_zoom = EscCommand.HEIGHT_ZOOM.MUL_1;
+                    break;
+                case 1:
+                    height_zoom = EscCommand.HEIGHT_ZOOM.MUL_2;
+                    break;
+                case 2:
+                    height_zoom = EscCommand.HEIGHT_ZOOM.MUL_3;
+                    break;
+                default:
+                    break;
+            }
 
             // 设置打印位置
             if (x == 0)
@@ -52,7 +81,8 @@ public class PrintContent {
 
             if ("text".equals(type)) {
                 // 设置为倍高倍宽
-                esc.addSelectPrintModes(EscCommand.FONT.FONTA, emphasized, doubleheight, doublewidth, isUnderline);
+                //esc.addSelectPrintModes(EscCommand.FONT.FONTA, emphasized, doubleheight, doublewidth, isUnderline);
+                esc.addSetCharcterSize(width_zoom, height_zoom);
                 if (x > 0)
                     esc.addSetAbsolutePrintPosition((short) x);
                 esc.addText(content);
