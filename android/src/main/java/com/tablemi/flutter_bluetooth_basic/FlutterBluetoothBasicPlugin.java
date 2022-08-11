@@ -59,9 +59,19 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private Context context;
     private int lastEventId = 1452;
 
+    private static final int REQUEST_FINE_LOCATION_PERMISSIONS = 1451;
+    private static final int REQUEST_COARSE_LOCATION_PERMISSIONS = 1452;
+    private static final int REQUEST_CONNECT_PERMISSIONS = 1453;
+    private static final int REQUEST_ENABLE_BLUETOOTH = 1001;
+    private static final int REQUEST_DEVICES = 1002;
+
+    private MethodCall pendingCall;
+    private Result pendingResult;
+    private Map<String, Object> pendingArgs;
+
     private final Object tearDownLock = new Object();
 
-    private final Map<Integer, OperationOnPermission> operationsOnPermission = new HashMap<>();
+    //private final Map<Integer, OperationOnPermission> operationsOnPermission = new HashMap<>();
 
 
     @Override
@@ -74,7 +84,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         stateChannel.setStreamHandler(stateStreamHandler);
         this.context = (Application) pluginBinding.getApplicationContext();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(BluetoothManager.class);
+            this.mBluetoothManager =  this.context.getSystemService(BluetoothManager.class);
         } else
             this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.mBluetoothAdapter = mBluetoothManager.getAdapter();
@@ -121,11 +131,11 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         activityBinding = null;
     }
 
-    private interface OperationOnPermission {
+   /* private interface OperationOnPermission {
         void op(boolean granted, String permission);
-    }
+    }*/
 
-
+/*
     private void ensurePermissionBeforeAction(String permission, OperationOnPermission operation) {
         if (permission != null &&
                 ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -142,7 +152,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             operation.op(true, permission);
         }
     }
-
+*/
 
     @Override
     public void onMethodCall(MethodCall call, Result result) {
@@ -161,25 +171,61 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 result.success(mBluetoothAdapter != null);
                 break;
             case "isOn":
+            case "isEnabled":
                 result.success(mBluetoothAdapter.isEnabled());
                 break;
             case "isConnected":
                 result.success(threadPool != null);
                 break;
+            case "requestEnable":
+                if (!mBluetoothAdapter.isEnabled()) {
+                    pendingResult = result;
+                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                } else {
+                    result.success(true);
+                }
+                break;
+
+            case "requestDisable":
+                if (mBluetoothAdapter.isEnabled()) {
+                    mBluetoothAdapter.disable();
+                    result.success(true);
+                } else {
+                    result.success(false);
+                }
+                break;
             case "startScan": {
-                ensurePermissionBeforeAction(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? Manifest.permission.BLUETOOTH_SCAN : Manifest.permission.ACCESS_FINE_LOCATION, (grantedScan, permissionScan) -> {
-                    if (grantedScan) {
-                        ensurePermissionBeforeAction(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? Manifest.permission.BLUETOOTH_CONNECT : null, (grantedConnect, permissionConnect) -> {
-                            if (grantedConnect)
-                                startScan(call, result);
-                            else result.error(
-                                    "no_permissions", String.format("flutter basic plugin requires %s for scanning", permissionConnect), null);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                                    Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                                    Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
-                        });
-                    } else result.error(
-                            "no_permissions", String.format("flutter basic plugin requires %s for scanning", permissionScan), null);
+                        ActivityCompat.requestPermissions(activityBinding.getActivity(), new String[]{
+                                        Manifest.permission.BLUETOOTH_SCAN,
+                                        Manifest.permission.BLUETOOTH_CONNECT,
+                                        Manifest.permission.ACCESS_FINE_LOCATION,},
+                                REQUEST_FINE_LOCATION_PERMISSIONS);
+                        pendingCall = call;
+                        pendingResult = result;
+                        break;
+                    }
+                } else {
+                    if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
-                });
+                        ActivityCompat.requestPermissions(activityBinding.getActivity(),
+                                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_COARSE_LOCATION_PERMISSIONS);
+                        pendingCall = call;
+                        pendingResult = result;
+                        break;
+                    }
+                }
+                startScan(call, result);
                 break;
             }
             case "stopScan":
@@ -187,15 +233,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 result.success(null);
                 break;
             case "connect":
-                ensurePermissionBeforeAction(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                        ? Manifest.permission.BLUETOOTH_CONNECT : null, (granted, permission) -> {
-                    if (!granted) {
-                        result.error(
-                                "no_permissions", String.format("flutter basic plugin requires %s for new connection", permission), null);
-                        return;
-                    } else
-                        connect(result, args);
-                });
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                            activityBinding.getActivity(),
+                            new String[]{Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT},
+                            REQUEST_CONNECT_PERMISSIONS);
+                    pendingResult = result;
+                    pendingArgs = args;
+                    break;
+                }
+                connect(result, args);
                 break;
             case "disconnect":
                 result.success(disconnect());
@@ -381,11 +429,48 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     @Override
     public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
 
-        OperationOnPermission operation = operationsOnPermission.get(requestCode);
+      /*  OperationOnPermission operation = operationsOnPermission.get(requestCode);
         if (operation != null && grantResults.length > 0) {
             operation.op(grantResults[0] == PackageManager.PERMISSION_GRANTED, permissions[0]);
             return true;
         }
+        return false;*/
+
+        if (requestCode == REQUEST_FINE_LOCATION_PERMISSIONS) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startScan(pendingCall, pendingResult);
+            } else {
+                pendingResult.error("no_permissions", "this plugin requires location permissions for scanning", null);
+                pendingResult = null;
+            }
+            return true;
+        } else if (requestCode == REQUEST_COARSE_LOCATION_PERMISSIONS) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startScan(pendingCall, pendingResult);
+            } else {
+                pendingResult.error("no_permissions", "this plugin requires location permissions for scanning", null);
+                pendingResult = null;
+            }
+            return true;
+        } else if (requestCode == REQUEST_CONNECT_PERMISSIONS) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                connect(pendingResult, pendingArgs);
+            } else {
+                pendingResult.error("no_permissions", "this plugin requires  permissions for connecting", null);
+                pendingResult = null;
+            }
+            return true;
+        } else if (requestCode == REQUEST_DEVICES) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                getDevices(pendingResult);
+            } else {
+                pendingResult.error("no_permissions", "this plugin requires  permissions for getting devices", null);
+                pendingResult = null;
+            }
+            return true;
+        }
+
+
         return false;
     }
 

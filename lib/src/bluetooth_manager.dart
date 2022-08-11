@@ -124,6 +124,22 @@ class BluetoothManager {
     _isScanning.add(false);
   }
 
+
+  /* Adapter settings and general */
+  /// Tries to enable Bluetooth interface (if disabled).
+  /// Probably results in asking user for confirmation.
+  Future<bool?> requestEnable() async =>
+      await _channel.invokeMethod('requestEnable');
+
+
+  /// Returns list of bonded devices.
+  Future<List<BluetoothDevice>> getBondedDevices() async {
+    final List list = await (_channel.invokeMethod('getBondedDevices'));
+    var result= list.map((map) => BluetoothDevice.fromMap(map)).toList();
+    _scanResults.add(result);
+    return result;
+  }
+
   Future<dynamic> connect(BluetoothDevice device) =>
       _channel.invokeMethod('connect', device.toJson());
 
