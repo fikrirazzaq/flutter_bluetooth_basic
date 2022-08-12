@@ -384,7 +384,6 @@ public class DeviceConnFactoryManager {
             return;
         }
         try {
-            if(isOpenPort)
             this.mPort.writeDataImmediately(data, 0, data.size());
         } catch (Exception e) {
             // Abort Send

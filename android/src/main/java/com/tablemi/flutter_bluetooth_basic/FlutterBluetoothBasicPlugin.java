@@ -498,8 +498,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             threadPool.addSerialTask(() -> {
                 try {
                     DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
-                    if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
-                        result.success(true);
+                    result.success(true);
                 } catch (Exception ex) {
                     result.error("connect_error", ex.getMessage(), exceptionToString(ex));
                 }
