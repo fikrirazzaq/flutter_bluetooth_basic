@@ -15,6 +15,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -317,16 +318,43 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             if (list == null) {
                 return;
             } else {
-                threadPool = ThreadPool.getInstantiation();
-                threadPool.addSerialTask(() -> {
+
+                AsyncTask.execute(() -> {
+                    try {
                     Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
                     DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
+                    } catch (Exception ex) {
+                        activityBinding.getActivity().runOnUiThread(() -> result.error("write_error", ex.getMessage(), exceptionToString(ex)));
+                    }
                 });
             }
         } else {
             result.error("please add config or data", "", null);
         }
 
+    }
+
+
+    @SuppressWarnings("unchecked")
+    private void writeData(Result result, Map<String, Object> args) {
+        if (args.containsKey("bytes")) {
+            final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
+            AsyncTask.execute(() -> {
+                try {
+                    Vector<Byte> vectorData = new Vector<>();
+                    for (int i = 0; i < bytes.size(); ++i) {
+                        Integer val = bytes.get(i);
+                        vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
+                    }
+
+                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
+                } catch (Exception ex) {
+                    activityBinding.getActivity().runOnUiThread(() -> result.error("write_error", ex.getMessage(), exceptionToString(ex)));
+                }
+            });
+        } else {
+            result.error("bytes_empty", "Bytes param is empty", null);
+        }
     }
 
 
@@ -461,21 +489,15 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                     .setMacAddress(address)
                     .build();
             // Open port
-            threadPool = ThreadPool.getInstantiation();
-            threadPool.addSerialTask(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
-                        if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
-                            result.success(true);
-                    } catch (Exception ex) {
-                        result.error("connect_error", ex.getMessage(), exceptionToString(ex));
-                    }
+            AsyncTask.execute(() -> {
+                try {
+                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
+                    if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
+                        activityBinding.getActivity().runOnUiThread(() -> result.success(true));
+                } catch (Exception ex) {
+                    activityBinding.getActivity().runOnUiThread(() -> result.error("connect_error", ex.getMessage(), exceptionToString(ex)));
                 }
             });
-
-
         } else {
             result.error("invalid_argument", "Argument 'address' not found", null);
         }
@@ -505,28 +527,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         return true;
     }
 
-    @SuppressWarnings("unchecked")
-    private void writeData(Result result, Map<String, Object> args) {
-        if (args.containsKey("bytes")) {
-            final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
-
-            threadPool = ThreadPool.getInstantiation();
-            threadPool.addSerialTask(new Runnable() {
-                @Override
-                public void run() {
-                    Vector<Byte> vectorData = new Vector<>();
-                    for (int i = 0; i < bytes.size(); ++i) {
-                        Integer val = bytes.get(i);
-                        vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
-                    }
-
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
-                }
-            });
-        } else {
-            result.error("bytes_empty", "Bytes param is empty", null);
-        }
-    }
 
     @Override
     public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {

@@ -71,14 +71,11 @@ public class ThreadPool {
         if (r == null) {
             throw new NullPointerException("addTask(Runnable runnable)传入参数为空");
         }
-        mArrayDeque.offer(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    r.run();
-                } finally {
-                    scheduleNext();
-                }
+        mArrayDeque.offer(() -> {
+            try {
+                r.run();
+            } finally {
+                scheduleNext();
             }
         });
         // 第一次入队列时mActivie为空，因此需要手动调用scheduleNext方法
