@@ -319,10 +319,11 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 return;
             } else {
 
-                AsyncTask.execute(() -> {
+                threadPool = ThreadPool.getInstantiation();
+                threadPool.addSerialTask(() -> {
                     try {
-                    Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
+                        Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
+                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
                     } catch (Exception ex) {
                         activityBinding.getActivity().runOnUiThread(() -> result.error("write_error", ex.getMessage(), exceptionToString(ex)));
                     }
@@ -339,17 +340,21 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private void writeData(Result result, Map<String, Object> args) {
         if (args.containsKey("bytes")) {
             final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
-            AsyncTask.execute(() -> {
-                try {
-                    Vector<Byte> vectorData = new Vector<>();
-                    for (int i = 0; i < bytes.size(); ++i) {
-                        Integer val = bytes.get(i);
-                        vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
-                    }
+            threadPool = ThreadPool.getInstantiation();
+            threadPool.addSerialTask(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Vector<Byte> vectorData = new Vector<>();
+                        for (int i = 0; i < bytes.size(); ++i) {
+                            Integer val = bytes.get(i);
+                            vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
+                        }
 
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
-                } catch (Exception ex) {
-                    activityBinding.getActivity().runOnUiThread(() -> result.error("write_error", ex.getMessage(), exceptionToString(ex)));
+                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
+                    } catch (Exception ex) {
+                        result.error("write_error", ex.getMessage(), exceptionToString(ex));
+                    }
                 }
             });
         } else {
@@ -489,13 +494,14 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                     .setMacAddress(address)
                     .build();
             // Open port
-            AsyncTask.execute(() -> {
+            threadPool = ThreadPool.getInstantiation();
+            threadPool.addSerialTask(() -> {
                 try {
                     DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
                     if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState())
-                        activityBinding.getActivity().runOnUiThread(() -> result.success(true));
+                        result.success(true);
                 } catch (Exception ex) {
-                    activityBinding.getActivity().runOnUiThread(() -> result.error("connect_error", ex.getMessage(), exceptionToString(ex)));
+                    result.error("connect_error", ex.getMessage(), exceptionToString(ex));
                 }
             });
         } else {
