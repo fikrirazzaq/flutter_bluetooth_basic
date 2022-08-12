@@ -477,15 +477,8 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private void connect(Result result, Map<String, Object> args) {
         if (args.containsKey("address")) {
             String address = (String) args.get("address");
+            disconnect();
 
-            try {
-                if (!BluetoothAdapter.checkBluetoothAddress(address)) {
-                    throw new ClassCastException();
-                }
-            } catch (ClassCastException ex) {
-                result.error("invalid_argument", "'address' argument is required to be string containing remote MAC address", null);
-                return;
-            }
             new DeviceConnFactoryManager.Build()
                     .setId(id)
                     // Set the connection method
