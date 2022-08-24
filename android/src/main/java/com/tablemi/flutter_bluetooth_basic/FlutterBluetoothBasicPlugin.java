@@ -252,9 +252,12 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             case "getBondedDevices":
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
-                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                                    Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
 
                         ActivityCompat.requestPermissions(activityBinding.getActivity(), new String[]{
+                                        Manifest.permission.BLUETOOTH_CONNECT,
                                         Manifest.permission.ACCESS_FINE_LOCATION,},
                                 REQUEST_DEVICES);
                         pendingResult = result;
