@@ -200,8 +200,22 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             case "requestEnable":
                 if (!mBluetoothAdapter.isEnabled()) {
                     pendingResult = result;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        if (ContextCompat.checkSelfPermission(activityBinding.getActivity(),
+                                Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+
+                            ActivityCompat.requestPermissions(activityBinding.getActivity(), new String[]{
+                                            Manifest.permission.BLUETOOTH_CONNECT,},
+                                    REQUEST_ENABLE_BLUETOOTH);
+                            pendingCall = call;
+                            pendingResult = result;
+                            break;
+                        }
+
+                    }
                     Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                     ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                    result.success(true);
                 } else {
                     result.success(true);
                 }
@@ -531,14 +545,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
 
     @Override
     public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-
-      /*  OperationOnPermission operation = operationsOnPermission.get(requestCode);
-        if (operation != null && grantResults.length > 0) {
-            operation.op(grantResults[0] == PackageManager.PERMISSION_GRANTED, permissions[0]);
-            return true;
-        }
-        return false;*/
-
         if (requestCode == REQUEST_FINE_LOCATION_PERMISSIONS) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startScan(pendingCall, pendingResult);
@@ -571,9 +577,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 pendingResult = null;
             }
             return true;
+        } else if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                pendingResult.success(true);
+            } else {
+                pendingResult.error("no_permissions", "this plugin requires  permissions for enable bluetooth", null);
+                pendingResult = null;
+            }
+            return true;
         }
-
-
         return false;
     }
 
