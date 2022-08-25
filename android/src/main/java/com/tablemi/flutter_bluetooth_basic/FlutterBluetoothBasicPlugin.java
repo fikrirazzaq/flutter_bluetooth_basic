@@ -1,7 +1,6 @@
 package com.tablemi.flutter_bluetooth_basic;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.Application;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -15,7 +14,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -51,7 +49,7 @@ import io.flutter.plugin.common.PluginRegistry.RequestPermissionsResultListener;
 public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHandler,
         RequestPermissionsResultListener, ActivityAware {
     private static final String TAG = "BluetoothBasicPlugin";
-    private int id = 0;
+    private final int id = 0;
     private ThreadPool threadPool;
     private static final String NAMESPACE = "flutter_bluetooth_basic";
     private MethodChannel channel;
@@ -61,7 +59,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private FlutterPluginBinding pluginBinding;
     private ActivityPluginBinding activityBinding;
     private Context context;
-    private int lastEventId = 1452;
 
     private static final int REQUEST_FINE_LOCATION_PERMISSIONS = 1451;
     private static final int REQUEST_COARSE_LOCATION_PERMISSIONS = 1452;
@@ -151,28 +148,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         activityBinding = null;
     }
 
-   /* private interface OperationOnPermission {
-        void op(boolean granted, String permission);
-    }*/
-
-/*
-    private void ensurePermissionBeforeAction(String permission, OperationOnPermission operation) {
-        if (permission != null &&
-                ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-            operationsOnPermission.put(lastEventId, (granted, perm) -> {
-                operationsOnPermission.remove(lastEventId);
-                operation.op(granted, perm);
-            });
-            ActivityCompat.requestPermissions(
-                    activityBinding.getActivity(),
-                    new String[]{permission},
-                    lastEventId);
-            lastEventId++;
-        } else {
-            operation.op(true, permission);
-        }
-    }
-*/
 
     @Override
     public void onMethodCall(MethodCall call, Result result) {
@@ -213,12 +188,15 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                         }
 
                     }
-                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                    ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
-                    result.success(true);
-                } else {
-                    result.success(true);
+                    try {
+                        Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                        ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                    } catch (Exception ex) {
+                        result.error("request_enable_error", ex.getMessage(), exceptionToString(ex));
+                        break;
+                    }
                 }
+                result.success(true);
                 break;
 
             case "requestDisable":
@@ -358,20 +336,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         if (args.containsKey("bytes")) {
             final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
             threadPool = ThreadPool.getInstantiation();
-            threadPool.addSerialTask(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        Vector<Byte> vectorData = new Vector<>();
-                        for (int i = 0; i < bytes.size(); ++i) {
-                            Integer val = bytes.get(i);
-                            vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
-                        }
-
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
-                    } catch (Exception ex) {
-                        result.error("write_error", ex.getMessage(), exceptionToString(ex));
+            threadPool.addSerialTask(() -> {
+                try {
+                    Vector<Byte> vectorData = new Vector<>();
+                    for (int i = 0; i < bytes.size(); ++i) {
+                        Integer val = bytes.get(i);
+                        vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
                     }
+
+                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
+                } catch (Exception ex) {
+                    result.error("write_error", ex.getMessage(), exceptionToString(ex));
                 }
             });
         } else {
@@ -459,7 +434,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         });
     }
 
-    private ScanCallback mScanCallback = new ScanCallback() {
+    private final ScanCallback mScanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             BluetoothDevice device = result.getDevice();
@@ -579,9 +554,14 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             return true;
         } else if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
-                pendingResult.success(true);
+                mBluetoothAdapter.enable();
+                try {
+                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                    pendingResult.success(true);
+                } catch (Exception ex) {
+                    pendingResult.error("request_enable_error", ex.getMessage(), exceptionToString(ex));
+                }
             } else {
                 pendingResult.error("no_permissions", "this plugin requires  permissions for enable bluetooth", null);
                 pendingResult = null;
