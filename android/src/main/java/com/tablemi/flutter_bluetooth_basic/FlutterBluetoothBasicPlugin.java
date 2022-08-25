@@ -114,9 +114,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 (requestCode, resultCode, data) -> {
                     switch (requestCode) {
                         case REQUEST_ENABLE_BLUETOOTH:
-                            // @TODO - used underlying value of `Activity.RESULT_CANCELED`
-                            //  since we tend to use `androidx` in which I were
-                            //  not able to find the constant.
                             if (pendingResult != null) {
                                 pendingResult.success(resultCode != 0);
                             }
@@ -188,15 +185,10 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                         }
 
                     }
-                    try {
-                        Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                        ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
-                    } catch (Exception ex) {
-                        result.error("request_enable_error", ex.getMessage(), exceptionToString(ex));
-                        break;
-                    }
-                }
-                result.success(true);
+                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                    ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                } else
+                    result.success(true);
                 break;
 
             case "requestDisable":
@@ -554,14 +546,8 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             return true;
         } else if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                mBluetoothAdapter.enable();
-                try {
                     Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                     ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
-                    pendingResult.success(true);
-                } catch (Exception ex) {
-                    pendingResult.error("request_enable_error", ex.getMessage(), exceptionToString(ex));
-                }
             } else {
                 pendingResult.error("no_permissions", "this plugin requires  permissions for enable bluetooth", null);
                 pendingResult = null;
