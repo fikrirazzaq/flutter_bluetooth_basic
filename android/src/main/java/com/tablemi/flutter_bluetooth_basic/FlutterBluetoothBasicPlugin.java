@@ -17,6 +17,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -50,7 +51,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         RequestPermissionsResultListener, ActivityAware {
     private static final String TAG = "BluetoothBasicPlugin";
     private final int id = 0;
-    private ThreadPool threadPool;
     private static final String NAMESPACE = "flutter_bluetooth_basic";
     private MethodChannel channel;
     private EventChannel stateChannel;
@@ -59,6 +59,10 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private FlutterPluginBinding pluginBinding;
     private ActivityPluginBinding activityBinding;
     private Context context;
+    /**
+     * Member object for the chat services
+     */
+    private BluetoothService mService = null;
 
     private static final int REQUEST_FINE_LOCATION_PERMISSIONS = 1451;
     private static final int REQUEST_COARSE_LOCATION_PERMISSIONS = 1452;
@@ -89,7 +93,9 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         } else
             this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.mBluetoothAdapter = mBluetoothManager.getAdapter();
-
+        if (mService == null) {
+            mService = new BluetoothService( mBluetoothAdapter, mHandler);
+        }
     }
 
     @Override
@@ -112,24 +118,38 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         activityBinding = binding;
         binding.addActivityResultListener(
                 (requestCode, resultCode, data) -> {
-                    switch (requestCode) {
-                        case REQUEST_ENABLE_BLUETOOTH:
-                            if (pendingResult != null) {
-                                pendingResult.success(resultCode != 0);
-                            }
-                            return true;
-                        default:
-                            return false;
+                    if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
+                        if (pendingResult != null) {
+                            pendingResult.success(resultCode != 0);
+                        }
+                        return true;
                     }
+                    return false;
                 }
         );
         activityBinding.addRequestPermissionsResultListener(this);
+        if (mService == null) {
+            mService = new BluetoothService( mBluetoothAdapter, mHandler);
+        }
+        // Performing this check in onResume() covers the case in which BT was
+        // not enabled during onStart(), so we were paused to enable it...
+        // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
+        else {
+            // Only if the state is STATE_NONE, do we know that we haven't started already
+            if (mService.getState() == Constant.STATE_NONE) {
+                // Start the Bluetooth chat services
+                mService.start();
+            }
+        }
     }
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
         Log.d(TAG, "onDetachedFromActivityForConfigChanges");
         onDetachedFromActivity();
+        if (mService != null) {
+            mService.stop();
+        }
     }
 
     @Override
@@ -143,7 +163,28 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         Log.d(TAG, "onDetachedFromActivity");
         activityBinding.removeRequestPermissionsResultListener(this);
         activityBinding = null;
+        if (mService != null) {
+            mService.stop();
+        }
     }
+
+
+    /**
+     * The Handler that gets information back from the BluetoothChatService
+     */
+    private final Handler mHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            switch (msg.what) {
+                case Constant.MESSAGE_DEVICE_NAME:
+                    Log.d(TAG, msg.getData().getString(Constant.DEVICE_NAME));
+                    break;
+                case Constant.MESSAGE_TOAST:
+                    Log.d(TAG, msg.getData().getString(Constant.TOAST));
+                    break;
+            }
+        }
+    };
 
 
     @Override
@@ -167,7 +208,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 result.success(mBluetoothAdapter.isEnabled());
                 break;
             case "isConnected":
-                result.success(threadPool != null);
+                result.success(mService.getState() == Constant.STATE_CONNECTED);
                 break;
             case "requestEnable":
                 if (!mBluetoothAdapter.isEnabled()) {
@@ -297,24 +338,36 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
 
     }
 
+    protected byte[] convertVectorByteToBytes(Vector<Byte> data) {
+        byte[] sendData = new byte[data.size()];
+        if (data.size() > 0) {
+            for (int i = 0; i < data.size(); ++i) {
+                sendData[i] = (Byte) data.get(i);
+            }
+        }
+
+        return sendData;
+    }
+
     @SuppressWarnings("unchecked")
     private void print(Result result, Map<String, Object> args) {
         if (args.containsKey("config") && args.containsKey("data")) {
             final Map<String, Object> config = (Map<String, Object>) args.get("config");
             final List<Map<String, Object>> list = (List<Map<String, Object>>) args.get("data");
-            if (list == null) {
-                return;
-            } else {
+            if (list != null) {
 
-                threadPool = ThreadPool.getInstantiation();
-                threadPool.addSerialTask(() -> {
-                    try {
-                        Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
-                        DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
-                    } catch (Exception ex) {
-                        activityBinding.getActivity().runOnUiThread(() -> result.error("write_error", ex.getMessage(), exceptionToString(ex)));
-                    }
-                });
+                // Check that we're actually connected before trying anything
+                if (mService.getState() != Constant.STATE_CONNECTED) {
+                    result.error("1000", "please connect to device" + mService.getState(), null);
+                    return;
+                }
+                try {
+                    Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
+                    mService.write(convertVectorByteToBytes(vectorData));
+
+                } catch (Exception ex) {
+                    result.error("write_error", ex.getMessage(), exceptionToString(ex));
+                }
             }
         } else {
             result.error("please add config or data", "", null);
@@ -327,20 +380,17 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private void writeData(Result result, Map<String, Object> args) {
         if (args.containsKey("bytes")) {
             final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
-            threadPool = ThreadPool.getInstantiation();
-            threadPool.addSerialTask(() -> {
-                try {
-                    Vector<Byte> vectorData = new Vector<>();
-                    for (int i = 0; i < bytes.size(); ++i) {
-                        Integer val = bytes.get(i);
-                        vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
-                    }
-
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].sendDataImmediately(vectorData);
-                } catch (Exception ex) {
-                    result.error("write_error", ex.getMessage(), exceptionToString(ex));
+            // Check that we're actually connected before trying anything
+            try {
+                Vector<Byte> vectorData = new Vector<>();
+                for (int i = 0; i < (bytes != null ? bytes.size() : 0); ++i) {
+                    Integer val = bytes.get(i);
+                    vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
                 }
-            });
+                mService.write(convertVectorByteToBytes(vectorData));
+            } catch (Exception ex) {
+                result.error("write_error", ex.getMessage(), exceptionToString(ex));
+            }
         } else {
             result.error("bytes_empty", "Bytes param is empty", null);
         }
@@ -407,7 +457,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         }
     }
 
-    private void invokeMethodUIThread(final String name, final BluetoothDevice device) {
+    private void invokeMethodUIThread(final BluetoothDevice device) {
         final Map<String, Object> ret = new HashMap<>();
         ret.put("address", device.getAddress());
         ret.put("name", device.getName());
@@ -418,9 +468,9 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             synchronized (tearDownLock) {
                 //Could already be teared down at this moment
                 if (channel != null) {
-                    channel.invokeMethod(name, ret);
+                    channel.invokeMethod("ScanResult", ret);
                 } else {
-                    Log.w(TAG, "Tried to call " + name + " on closed channel");
+                    Log.w(TAG, "Tried to call " + "ScanResult" + " on closed channel");
                 }
             }
         });
@@ -431,7 +481,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         public void onScanResult(int callbackType, ScanResult result) {
             BluetoothDevice device = result.getDevice();
             if (device != null && device.getName() != null) {
-                invokeMethodUIThread("ScanResult", device);
+                invokeMethodUIThread(device);
             }
         }
     };
@@ -461,25 +511,15 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
     private void connect(Result result, Map<String, Object> args) {
         if (args.containsKey("address")) {
             String address = (String) args.get("address");
-            disconnect();
-
-            new DeviceConnFactoryManager.Build()
-                    .setId(id)
-                    // Set the connection method
-                    .setConnMethod(DeviceConnFactoryManager.CONN_METHOD.BLUETOOTH)
-                    // Set the connected Bluetooth mac address
-                    .setMacAddress(address)
-                    .build();
-            // Open port
-            threadPool = ThreadPool.getInstantiation();
-            threadPool.addSerialTask(() -> {
-                try {
-                    DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].openPort();
-                    result.success(true);
-                } catch (Exception ex) {
-                    result.error("connect_error", ex.getMessage(), exceptionToString(ex));
-                }
-            });
+           // disconnect();
+            try {
+                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+                // Attempt to connect to the device
+                mService.connect(device);
+                result.success(true);
+            } catch (Exception ex) {
+                result.error("connect_error", ex.getMessage(), exceptionToString(ex));
+            }
         } else {
             result.error("invalid_argument", "Argument 'address' not found", null);
         }
@@ -490,28 +530,22 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
      * Reconnect to recycle the last connected object to avoid memory leaks
      */
     private boolean disconnect() {
-
-        if (DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id] != null && DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].mPort != null
-                && DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].getConnState()) {
-            DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].reader.cancel();
-            DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].mPort.closePort();
-            DeviceConnFactoryManager.getDeviceConnFactoryManagers()[id].mPort = null;
+        if (mService != null) {
+            mService.stop();
         }
         return true;
     }
 
     private boolean destroy() {
-        DeviceConnFactoryManager.closeAllPort();
-        if (threadPool != null) {
-            threadPool.stopThreadPool();
+        if (mService != null) {
+            mService.stop();
         }
-
         return true;
     }
 
 
     @Override
-    public boolean onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public boolean onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         if (requestCode == REQUEST_FINE_LOCATION_PERMISSIONS) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 startScan(pendingCall, pendingResult);
@@ -546,8 +580,8 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             return true;
         } else if (requestCode == REQUEST_ENABLE_BLUETOOTH) {
             if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-                    ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
+                Intent intent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+                ActivityCompat.startActivityForResult(activityBinding.getActivity(), intent, REQUEST_ENABLE_BLUETOOTH, null);
             } else {
                 pendingResult.error("no_permissions", "this plugin requires  permissions for enable bluetooth", null);
                 pendingResult = null;
@@ -567,12 +601,13 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                 Log.d(TAG, "stateStreamHandler, current action: " + action);
 
                 if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
-                    threadPool = null;
+                    if (mService != null) {
+                        mService.stop();
+                    }
                     sink.success(intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1));
                 } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
                     sink.success(1);
                 } else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
-                    threadPool = null;
                     sink.success(0);
                 }
             }
