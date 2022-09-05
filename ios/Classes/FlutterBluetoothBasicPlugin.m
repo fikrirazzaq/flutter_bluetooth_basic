@@ -5,7 +5,6 @@
 @property(nonatomic, retain) NSObject<FlutterPluginRegistrar> *registrar;
 @property(nonatomic, retain) FlutterMethodChannel *channel;
 @property(nonatomic, retain) BluetoothPrintStreamHandler *stateStreamHandler;
-@property(nonatomic, retain) CBCentralManager *centralManager;
 @property(nonatomic) NSMutableDictionary *scannedPeripherals;
 @end
 
@@ -16,10 +15,10 @@
             binaryMessenger:[registrar messenger]];
   FlutterEventChannel* stateChannel = [FlutterEventChannel eventChannelWithName:NAMESPACE @"/state" binaryMessenger:[registrar messenger]];
   FlutterBluetoothBasicPlugin* instance = [[FlutterBluetoothBasicPlugin alloc] init];
+
   instance.channel = channel;
-  instance.centralManager = [[CBCentralManager alloc] initWithDelegate:instance queue:nil];
   instance.scannedPeripherals = [NSMutableDictionary new];
-    
+
   // STATE
   BluetoothPrintStreamHandler* stateStreamHandler = [[BluetoothPrintStreamHandler alloc] init];
   [stateChannel setStreamHandler:stateStreamHandler];
@@ -30,35 +29,21 @@
 
 - (void)handleMethodCall:(FlutterMethodCall*)call result:(FlutterResult)result {
   NSLog(@"call method -> %@", call.method);
-    
+
   if ([@"state" isEqualToString:call.method]) {
     result(nil);
   } else if([@"isAvailable" isEqualToString:call.method]) {
-     if(self.centralManager.state != CBManagerStateUnsupported && self.centralManager.state != CBManagerStateUnknown) {
-          result(@(YES));
-        } else {
-          result(@(NO));
-        }
+
+    result(@(YES));
   } else if([@"isConnected" isEqualToString:call.method]) {
-    
+
     result(@(NO));
   } else if([@"isOn" isEqualToString:call.method]) {
-    if(self.centralManager.state == CBManagerStatePoweredOn) {
-         result(@(YES));
-       } else {
-         result(@(NO));
-       }
-  } else if([@"requestEnable" isEqualToString:call.method]) {
-        result(@(YES));
-  } else if([@"getBondedDevices" isEqualToString:call.method]) {
-      // Cannot pass blank UUID list for security reasons. Assume all devices have the Generic Access service 0x1800
-      NSArray *periphs = [self->_centralManager retrieveConnectedPeripheralsWithServices:@[[CBUUID UUIDWithString:@"1800"]]];
-      NSLog(@"getBondedDevices periphs size: %lu", [periphs count]);
-      result([self toFlutterData:[self toConnectedDeviceResponseProto:periphs]]);
-  } else if([@"startScan" isEqualToString:call.method]) {
+    result(@(YES));
+  }else if([@"startScan" isEqualToString:call.method]) {
       NSLog(@"getDevices method -> %@", call.method);
       [self.scannedPeripherals removeAllObjects];
-      
+
       if (Manager.bleConnecter == nil) {
           [Manager didUpdateState:^(NSInteger state) {
               switch (state) {
@@ -83,7 +68,7 @@
       } else {
           [self startScan];
       }
-      
+
     result(nil);
   } else if([@"stopScan" isEqualToString:call.method]) {
     [Manager stopScan];
@@ -93,12 +78,12 @@
     @try {
       NSLog(@"connect device begin -> %@", [device objectForKey:@"name"]);
       CBPeripheral *peripheral = [_scannedPeripherals objectForKey:[device objectForKey:@"address"]];
-        
+
       self.state = ^(ConnectState state) {
         [self updateConnectState:state];
       };
       [Manager connectPeripheral:peripheral options:nil timeout:2 connectBlack: self.state];
-      
+
       result(nil);
     } @catch(FlutterError *e) {
       result(e);
@@ -113,7 +98,7 @@
   } else if([@"writeData" isEqualToString:call.method]) {
        @try {
            NSDictionary *args = [call arguments];
-           
+
            NSMutableArray *bytes = [args objectForKey:@"bytes"];
 
            NSNumber* lenBuf = [args objectForKey:@"length"];
@@ -137,36 +122,16 @@
 -(void)startScan {
     [Manager scanForPeripheralsWithServices:nil options:nil discover:^(CBPeripheral * _Nullable peripheral, NSDictionary<NSString *,id> * _Nullable advertisementData, NSNumber * _Nullable RSSI) {
         if (peripheral.name != nil) {
-            
+
             NSLog(@"find device -> %@", peripheral.name);
             [self.scannedPeripherals setObject:peripheral forKey:[[peripheral identifier] UUIDString]];
-            
+
             NSDictionary *device = [NSDictionary dictionaryWithObjectsAndKeys:peripheral.identifier.UUIDString,@"address",peripheral.name,@"name",nil,@"type",nil];
             [_channel invokeMethod:@"ScanResult" arguments:device];
         }
     }];
-    
+
 }
-
-
-
-- (CBPeripheral*)findPeripheral:(NSString*)remoteId {
-  NSArray<CBPeripheral*> *peripherals = [_centralManager retrievePeripheralsWithIdentifiers:@[[[NSUUID alloc] initWithUUIDString:remoteId]]];
-  CBPeripheral *peripheral;
-  for(CBPeripheral *p in peripherals) {
-    if([[p.identifier UUIDString] isEqualToString:remoteId]) {
-      peripheral = p;
-      break;
-    }
-  }
-  if(peripheral == nil) {
-    @throw [FlutterError errorWithCode:@"findPeripheral"
-                               message:@"Peripheral not found"
-                               details:nil];
-  }
-  return peripheral;
-}
-
 
 -(void)updateConnectState:(ConnectState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -193,22 +158,13 @@
                 ret = @0;
                 break;
         }
-        
+
          NSDictionary *dict = [NSDictionary dictionaryWithObjectsAndKeys:ret,@"id",nil];
         if(_stateStreamHandler.sink != nil) {
           self.stateStreamHandler.sink([dict objectForKey:@"id"]);
         }
     });
 }
-
-- (void)centralManagerDidUpdateState:(CBCentralManager *)central {
-
-    if (central.state == CBCentralManagerStatePoweredOff) {
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle: @"Error" message: @"Please turn on Bluetooth in Settings" delegate: nil cancelButtonTitle:@"OK" otherButtonTitles:nil];
-       [alert show];
-    }
- }
-
 
 @end
 
