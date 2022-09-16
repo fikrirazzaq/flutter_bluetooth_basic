@@ -217,7 +217,7 @@ public class BluetoothService {
                 Log.e(TAG, "Socket create() failed", e);
             }
             mmSocket = tmp;
-            mState = Constant.STATE_CONNECTING;
+
         }
 
 
@@ -333,9 +333,12 @@ public class BluetoothService {
             Log.d(TAG, " shut down the connection");
             // Flush output buffers befoce closing
             try {
-                mmOutStream.flush();
-                mmOutStream.close();
-                mmInStream.close();
+                if (mmOutStream != null) {
+                    mmOutStream.flush();
+                    mmOutStream.close();
+                }
+                if (mmInStream != null)
+                    mmInStream.close();
             } catch (Exception e) {
                 Log.e(TAG, "mmOutStream flush error", e);
             }

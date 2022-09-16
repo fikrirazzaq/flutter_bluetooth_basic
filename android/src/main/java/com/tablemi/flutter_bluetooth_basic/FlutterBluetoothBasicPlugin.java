@@ -94,7 +94,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             this.mBluetoothManager = (BluetoothManager) this.context.getSystemService(Context.BLUETOOTH_SERVICE);
         this.mBluetoothAdapter = mBluetoothManager.getAdapter();
         if (mService == null) {
-            mService = new BluetoothService( mBluetoothAdapter, mHandler);
+            mService = new BluetoothService(mBluetoothAdapter, mHandler);
         }
     }
 
@@ -129,7 +129,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         );
         activityBinding.addRequestPermissionsResultListener(this);
         if (mService == null) {
-            mService = new BluetoothService( mBluetoothAdapter, mHandler);
+            mService = new BluetoothService(mBluetoothAdapter, mHandler);
         }
         // Performing this check in onResume() covers the case in which BT was
         // not enabled during onStart(), so we were paused to enable it...
@@ -181,6 +181,12 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                     break;
                 case Constant.MESSAGE_TOAST:
                     Log.d(TAG, msg.getData().getString(Constant.TOAST));
+                    break;
+                case Constant.STATE_CONNECTED:
+                    pendingResult.success(true);
+                    break;
+                case Constant.CONN_STATE_DISCONNECT:
+                    pendingResult.success(false);
                     break;
             }
         }
@@ -396,6 +402,25 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         }
     }
 
+    private void connect(Result result, Map<String, Object> args) {
+        if (args.containsKey("address")) {
+            String address = (String) args.get("address");
+            // disconnect();
+            try {
+                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+                // Attempt to connect to the device
+                mService.connect(device);
+                Thread.sleep(3000);
+                result.success(true);
+            } catch (Exception ex) {
+                result.error("connect_error", ex.getMessage(), exceptionToString(ex));
+            }
+        } else {
+            result.error("invalid_argument", "Argument 'address' not found", null);
+        }
+
+    }
+
 
     static private boolean checkIsDeviceConnected(BluetoothDevice device) {
         try {
@@ -508,23 +533,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         return sw.toString();
     }
 
-    private void connect(Result result, Map<String, Object> args) {
-        if (args.containsKey("address")) {
-            String address = (String) args.get("address");
-           // disconnect();
-            try {
-                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
-                // Attempt to connect to the device
-                mService.connect(device);
-                result.success(true);
-            } catch (Exception ex) {
-                result.error("connect_error", ex.getMessage(), exceptionToString(ex));
-            }
-        } else {
-            result.error("invalid_argument", "Argument 'address' not found", null);
-        }
-
-    }
 
     /**
      * Reconnect to recycle the last connected object to avoid memory leaks
