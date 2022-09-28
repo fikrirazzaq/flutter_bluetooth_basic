@@ -158,10 +158,11 @@ class BluetoothManager {
   }
 
 
-  Future<dynamic> printReceipt(
+  Future<dynamic> printReceipt(String address,
       Map<String, dynamic> config, List<LineText> data) {
     Map<String, Object> args = Map();
     args['config'] = config;
+    args['address']=address;
     args['data'] = data.map((m) {
       return m.toJson();
     }).toList();

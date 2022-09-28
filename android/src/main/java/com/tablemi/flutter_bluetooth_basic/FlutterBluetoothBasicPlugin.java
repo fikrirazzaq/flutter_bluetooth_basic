@@ -361,13 +361,11 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             final Map<String, Object> config = (Map<String, Object>) args.get("config");
             final List<Map<String, Object>> list = (List<Map<String, Object>>) args.get("data");
             if (list != null) {
-
-                // Check that we're actually connected before trying anything
-                if (mService.getState() != Constant.STATE_CONNECTED) {
-                    result.error("1000", "please connect to device" + mService.getState(), null);
-                    return;
-                }
                 try {
+                    String address = (String) args.get("address");
+                    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+                    // Attempt to connect to the device
+                    mService.connect(device);
                     Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
                     mService.write(convertVectorByteToBytes(vectorData));
 
@@ -404,13 +402,7 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
 
     private void connect(Result result, Map<String, Object> args) {
         if (args.containsKey("address")) {
-            String address = (String) args.get("address");
-            // disconnect();
             try {
-                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
-                // Attempt to connect to the device
-                mService.connect(device);
-                Thread.sleep(3000);
                 result.success(true);
             } catch (Exception ex) {
                 result.error("connect_error", ex.getMessage(), exceptionToString(ex));
