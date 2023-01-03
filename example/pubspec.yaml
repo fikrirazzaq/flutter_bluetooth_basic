@@ -8,8 +8,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^0.1.2
-  path_provider: ^1.4.5
+  cupertino_icons: ^1.0.5
+  path_provider: ^2.0.11
 
 dev_dependencies:
   flutter_test:
