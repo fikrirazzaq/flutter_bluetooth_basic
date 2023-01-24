@@ -14,6 +14,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -176,9 +177,6 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
-                case Constant.MESSAGE_DEVICE_NAME:
-                    Log.d(TAG, msg.getData().getString(Constant.DEVICE_NAME));
-                    break;
                 case Constant.MESSAGE_TOAST:
                     Log.d(TAG, msg.getData().getString(Constant.TOAST));
                     break;
@@ -256,6 +254,8 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
                                     Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
                         ActivityCompat.requestPermissions(activityBinding.getActivity(), new String[]{
+                                        Manifest.permission.BLUETOOTH,
+                                        Manifest.permission.BLUETOOTH_ADMIN,
                                         Manifest.permission.BLUETOOTH_SCAN,
                                         Manifest.permission.BLUETOOTH_CONNECT,
                                         Manifest.permission.ACCESS_FINE_LOCATION,},
@@ -361,17 +361,20 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
             final Map<String, Object> config = (Map<String, Object>) args.get("config");
             final List<Map<String, Object>> list = (List<Map<String, Object>>) args.get("data");
             if (list != null) {
-                try {
-                    String address = (String) args.get("address");
-                    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
-                    // Attempt to connect to the device
-                    mService.connect(device);
-                    Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
-                    mService.write(convertVectorByteToBytes(vectorData));
 
-                } catch (Exception ex) {
-                    result.error("write_error", ex.getMessage(), exceptionToString(ex));
-                }
+                String address = (String) args.get("address");
+                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+                // Attempt to connect to the device
+                AsyncTask.execute(() -> {
+                    try {
+                        mService.connect(device);
+                        Vector<Byte> vectorData = PrintContent.mapToReceipt(config, list);
+                        mService.write(convertVectorByteToBytes(vectorData));
+                    } catch (Exception ex) {
+                        result.error("write_error", ex.getMessage(), exceptionToString(ex));
+                    }
+                });
+
             }
         } else {
             result.error("please add config or data", "", null);
@@ -385,16 +388,23 @@ public class FlutterBluetoothBasicPlugin implements FlutterPlugin, MethodCallHan
         if (args.containsKey("bytes")) {
             final ArrayList<Integer> bytes = (ArrayList<Integer>) args.get("bytes");
             // Check that we're actually connected before trying anything
-            try {
-                Vector<Byte> vectorData = new Vector<>();
-                for (int i = 0; i < (bytes != null ? bytes.size() : 0); ++i) {
-                    Integer val = bytes.get(i);
-                    vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
-                }
-                mService.write(convertVectorByteToBytes(vectorData));
-            } catch (Exception ex) {
-                result.error("write_error", ex.getMessage(), exceptionToString(ex));
+
+            Vector<Byte> vectorData = new Vector<>();
+            for (int i = 0; i < (bytes != null ? bytes.size() : 0); ++i) {
+                Integer val = bytes.get(i);
+                vectorData.add(Byte.valueOf(Integer.toString(val > 127 ? val - 256 : val)));
             }
+            String address = (String) args.get("address");
+            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+            AsyncTask.execute(() -> {
+                try {
+                    mService.connect(device);
+
+                    mService.write(convertVectorByteToBytes(vectorData));
+                } catch (Exception ex) {
+                    result.error("write_error", ex.getMessage(), exceptionToString(ex));
+                }
+            });
         } else {
             result.error("bytes_empty", "Bytes param is empty", null);
         }

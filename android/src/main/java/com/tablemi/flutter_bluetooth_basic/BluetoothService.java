@@ -62,8 +62,9 @@ public class BluetoothService {
      *
      * @param device The BluetoothDevice to connect
      */
-    public synchronized void connect(BluetoothDevice device) {
+    public synchronized void connect(BluetoothDevice device) throws IOException {
         Log.d(TAG, "connect to: " + device);
+
 
         // Cancel any thread attempting to make a connection
         if (mState == Constant.STATE_CONNECTED) {
@@ -72,9 +73,28 @@ public class BluetoothService {
                 mConnectThread = null;
             }
         }
+        UUID PRINTER_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(PRINTER_UUID);
+        Log.d(TAG, "Get a BluetoothSocket");
+
+        if (mAdapter.isDiscovering()) {
+            mAdapter.cancelDiscovery();
+        }
+
+        // Make a connection to the BluetoothSocket
+        // This is a blocking call and will only return on a
+        // successful connection or an exception
+        socket.connect();
+        if (socket == null) {
+            throw new IOException("socket connection not established");
+        }
+        // Get the input and output streams; using temp objects because
+        // member streams are final.
+        Log.d(TAG, "Get input and output streams;");
 
         // Start the thread to connect with the given device
-        mConnectThread = new ConnectThread(device);
+        mConnectThread = new ConnectThread(socket);
         mConnectThread.start();
     }
 
@@ -138,34 +158,16 @@ public class BluetoothService {
         private final OutputStream mmOutStream;
 
 
-        public ConnectThread(BluetoothDevice device) {
-            BluetoothSocket tmp = null;
+        public ConnectThread(BluetoothSocket socket) {
+            mmSocket = socket;
             InputStream tmpIn = null;
             OutputStream tmpOut = null;
 
-            // Get a BluetoothSocket for a connection with the
-            // given BluetoothDevice
-            try {
-                UUID PRINTER_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-
-                tmp = device.createRfcommSocketToServiceRecord(PRINTER_UUID);
-                Log.d(TAG, "Get a BluetoothSocket");
-            } catch (IOException e) {
-                Log.e(TAG, "Socket create() failed", e);
-            }
-            mmSocket = tmp;
-
-            // Get the input and output streams; using temp objects because
-            // member streams are final.
-            Log.d(TAG, "Get input and output streams;");
             try {
                 tmpIn = mmSocket.getInputStream();
-            } catch (IOException e) {
-                Log.e(TAG, "Error occurred when creating input stream", e);
-            }
-            try {
                 tmpOut = mmSocket.getOutputStream();
             } catch (IOException e) {
+                Log.e(TAG, "Error occurred when creating input stream", e);
                 Log.e(TAG, "Error occurred when creating output stream", e);
             }
             mmInStream = tmpIn;
@@ -177,23 +179,20 @@ public class BluetoothService {
 
         public void run() {
             Log.i(TAG, "BEGIN mConnectThread Socket");
-
-            // Always cancel discovery because it will slow down a connection
-            mAdapter.cancelDiscovery();
-
-            // Make a connection to the BluetoothSocket
-            try {
-                // This is a blocking call and will only return on a
-                // successful connection or an exception
-                mmSocket.connect();
-            } catch (IOException e) {
-                // Close the socket
+            // Make sure output stream is closed
+            if (mmOutStream != null) {
                 try {
-                    mmSocket.close();
-                } catch (IOException e2) {
-                    Log.e(TAG, "unable to close() socket during connection failure", e2);
+                    mmOutStream.close();
                 }
-                connectionFailed();
+                catch (Exception ignored) {connectionFailed();}
+            }
+
+            // mmInStream sure input stream is closed
+            if (mmInStream != null) {
+                try {
+                    mmInStream.close();
+                }
+                catch (Exception ignored) {connectionFailed();}
             }
 
         }
@@ -202,8 +201,8 @@ public class BluetoothService {
         // Call this from the main activity to send data to the remote device.
         public void write(byte[] bytes) {
             try {
-                if(mmSocket!=null && mmSocket.isConnected() )
-                Log.d(TAG, " Write Data");
+                if (mmSocket != null && mmSocket.isConnected())
+                    Log.d(TAG, " Write Data");
                 mmOutStream.write(bytes);
             } catch (IOException e) {
                 Log.e(TAG, "Error occurred when sending data", e);
@@ -212,7 +211,7 @@ public class BluetoothService {
                 Message writeErrorMsg =
                         mHandler.obtainMessage(Constant.MESSAGE_TOAST);
                 Bundle bundle = new Bundle();
-                bundle.putString("toast",
+                bundle.putString(Constant.TOAST,
                         "Couldn't send data to the other device");
                 writeErrorMsg.setData(bundle);
                 mHandler.sendMessage(writeErrorMsg);
