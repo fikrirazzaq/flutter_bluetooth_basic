@@ -100,7 +100,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // Text with special characters
     // bytes += latin1.encode('blåbærgrød\n\n\n');
 
-    await bluetoothManager.writeData(bytes);
+    await bluetoothManager.writeData(_device.address,bytes);
   }
 
   @override

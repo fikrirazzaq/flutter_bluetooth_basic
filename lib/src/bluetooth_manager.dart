@@ -147,9 +147,10 @@ class BluetoothManager {
 
   Future<dynamic> destroy() => _channel.invokeMethod('destroy');
 
-  Future<dynamic> writeData(List<int> bytes) {
+  Future<dynamic> writeData(String address,List<int> bytes) {
     Map<String, Object> args = Map();
     args['bytes'] = bytes;
+    args['address']=address;
     args['length'] = bytes.length;
 
     _channel.invokeMethod('writeData', args);
