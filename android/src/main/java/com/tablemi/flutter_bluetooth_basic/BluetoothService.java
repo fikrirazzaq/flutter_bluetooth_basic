@@ -73,28 +73,9 @@ public class BluetoothService {
                 mConnectThread = null;
             }
         }
-        UUID PRINTER_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
-
-        BluetoothSocket socket = device.createRfcommSocketToServiceRecord(PRINTER_UUID);
-        Log.d(TAG, "Get a BluetoothSocket");
-
-        if (mAdapter.isDiscovering()) {
-            mAdapter.cancelDiscovery();
-        }
-
-        // Make a connection to the BluetoothSocket
-        // This is a blocking call and will only return on a
-        // successful connection or an exception
-        socket.connect();
-        if (socket == null) {
-            throw new IOException("socket connection not established");
-        }
-        // Get the input and output streams; using temp objects because
-        // member streams are final.
-        Log.d(TAG, "Get input and output streams;");
 
         // Start the thread to connect with the given device
-        mConnectThread = new ConnectThread(socket);
+        mConnectThread = new ConnectThread(device);
         mConnectThread.start();
     }
 
@@ -158,17 +139,35 @@ public class BluetoothService {
         private final OutputStream mmOutStream;
 
 
-        public ConnectThread(BluetoothSocket socket) {
-            mmSocket = socket;
+        public ConnectThread(BluetoothDevice device) {
             InputStream tmpIn = null;
             OutputStream tmpOut = null;
-
+            BluetoothSocket tmp = null;
             try {
+                UUID PRINTER_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+                tmp = device.createRfcommSocketToServiceRecord(PRINTER_UUID);
+                Log.d(TAG, "Get a BluetoothSocket");
+
+                if (mAdapter.isDiscovering()) {
+                    mAdapter.cancelDiscovery();
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Error discovering", e);
+            }
+            mmSocket = tmp;
+            // Get the input and output streams; using temp objects because
+            // member streams are final.
+            // Make a connection to the BluetoothSocket
+            // This is a blocking call and will only return on a
+            // successful connection or an exception
+            try {
+                mmSocket.connect();
+                Log.d(TAG, "Get input and output streams;");
                 tmpIn = mmSocket.getInputStream();
                 tmpOut = mmSocket.getOutputStream();
             } catch (IOException e) {
                 Log.e(TAG, "Error occurred when creating input stream", e);
-                Log.e(TAG, "Error occurred when creating output stream", e);
             }
             mmInStream = tmpIn;
             mmOutStream = tmpOut;
@@ -180,7 +179,7 @@ public class BluetoothService {
         public void run() {
             Log.i(TAG, "BEGIN mConnectThread Socket");
             // Make sure output stream is closed
-            if (mmOutStream != null) {
+          /*  if (mmOutStream != null) {
                 try {
                     mmOutStream.close();
                 }
@@ -193,7 +192,7 @@ public class BluetoothService {
                     mmInStream.close();
                 }
                 catch (Exception ignored) {connectionFailed();}
-            }
+            }*/
 
         }
 
