@@ -48,8 +48,6 @@ class _MyHomePageState extends State<MyHomePage> {
     bool isConnected = await bluetoothManager.isConnected;
 
     bluetoothManager.state.listen((state) {
-      print('cur device status: $state');
-
       switch (state) {
         case BluetoothManager.CONNECTED:
           setState(() {
@@ -84,7 +82,6 @@ class _MyHomePageState extends State<MyHomePage> {
       setState(() {
         tips = 'please select device';
       });
-      print('please select device');
     }
   }
 

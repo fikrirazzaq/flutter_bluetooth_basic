@@ -61,7 +61,7 @@ class BluetoothManager {
     Duration? timeout,
   }) async* {
     if (_isScanning.value == true) {
-      throw Exception('Another scan is already in progress.');
+      // throw Exception('Another scan is already in progress.');
     }
 
     // Emit to isScanning
@@ -79,10 +79,9 @@ class BluetoothManager {
     try {
       await _channel.invokeMethod('startScan');
     } catch (e) {
-      print('Error starting scan.');
       _stopScanPill.add(null);
       _isScanning.add(false);
-      throw e;
+      // throw e;
     }
 
     yield* BluetoothManager.instance._methodStream
